@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import './style.css';
 import { buildScene } from './scene.js';
 import { createTrafficLights, updateTrafficLightColors } from './trafficLights.js';
@@ -13,6 +14,12 @@ import {
 
 const DIRECTIONS = ['N', 'S', 'E', 'W'];
 const CAR_COLORS = { N: 0x3498db, S: 0xf1c40f, E: 0x9b59b6, W: 0x1abc9c };
+const CAR_MODELS = {
+  N: '/assets/models/cars/sedan.glb',
+  S: '/assets/models/cars/taxi.glb',
+  E: '/assets/models/cars/hatchback-sports.glb',
+  W: '/assets/models/cars/police.glb',
+};
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
@@ -42,8 +49,11 @@ updateTrafficLightColors(lightMeshes, lightState);
 
 const cars = [];
 const carMeshes = new Map();
+const carMeshKinds = new Map();
 const particleBursts = [];
 const scorePopups = [];
+const carTemplates = new Map();
+const gltfLoader = new GLTFLoader();
 
 let score = 0;
 let gameOver = false;
@@ -56,27 +66,101 @@ const scoreEl = document.getElementById('score');
 const gameOverEl = document.getElementById('gameOver');
 const restartBtn = document.getElementById('restartBtn');
 
+function createBoxCar(direction) {
+  const geometry = new THREE.BoxGeometry(CAR_WIDTH, 1, CAR_LENGTH);
+  const material = new THREE.MeshStandardMaterial({ color: CAR_COLORS[direction] });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.userData.asset = false;
+  return mesh;
+}
+
+function prepareCarTemplate(sceneRoot) {
+  const template = sceneRoot.clone(true);
+  const bounds = new THREE.Box3().setFromObject(template);
+  const size = bounds.getSize(new THREE.Vector3());
+  const scale = Math.min(CAR_WIDTH / size.x, CAR_LENGTH / size.z);
+  template.scale.setScalar(scale);
+
+  const scaledBounds = new THREE.Box3().setFromObject(template);
+  const center = scaledBounds.getCenter(new THREE.Vector3());
+  template.position.x -= center.x;
+  template.position.z -= center.z;
+  template.position.y -= scaledBounds.min.y;
+  template.userData.asset = true;
+  return template;
+}
+
+function replaceCarMesh(id, nextMesh) {
+  const currentMesh = carMeshes.get(id);
+  if (!currentMesh) return;
+
+  nextMesh.position.copy(currentMesh.position);
+  nextMesh.rotation.copy(currentMesh.rotation);
+  nextMesh.userData.asset = true;
+  scene.remove(currentMesh);
+  if (!currentMesh.userData.asset) {
+    currentMesh.geometry.dispose();
+    currentMesh.material.dispose();
+  }
+  scene.add(nextMesh);
+  carMeshes.set(id, nextMesh);
+}
+
+function loadCarTemplates() {
+  return Promise.all(
+    Object.entries(CAR_MODELS).map(
+      ([direction, path]) =>
+        new Promise((resolve, reject) => {
+          gltfLoader.load(
+            path,
+            (gltf) => {
+              carTemplates.set(direction, prepareCarTemplate(gltf.scene));
+              resolve();
+            },
+            undefined,
+            (error) => reject(new Error(`Failed to load ${path}: ${error.message}`))
+          );
+        })
+    )
+  ).then(() => {
+    for (const car of cars) {
+      const template = carTemplates.get(car.direction);
+      if (template && carMeshKinds.get(car.id) === 'box') {
+        replaceCarMesh(car.id, template.clone(true));
+        carMeshKinds.set(car.id, 'asset');
+      }
+    }
+  });
+}
+
+loadCarTemplates().catch((error) => {
+  console.error('Kenney car models could not be loaded; using fallback cars.', error);
+});
+
 function spawnRandomCar() {
   const direction = DIRECTIONS[Math.floor(Math.random() * DIRECTIONS.length)];
   const car = createCar(direction);
   cars.push(car);
 
-  const geometry = new THREE.BoxGeometry(CAR_WIDTH, 1, CAR_LENGTH);
-  const material = new THREE.MeshStandardMaterial({ color: CAR_COLORS[direction] });
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.position.y = 0.5;
-  if (DIRECTION_INFO[direction].axis === 'x') mesh.rotation.y = Math.PI / 2;
+  const mesh = carTemplates.get(direction)?.clone(true) ?? createBoxCar(direction);
+  mesh.position.y = 0;
+  const info = DIRECTION_INFO[direction];
+  mesh.rotation.y = info.axis === 'z' ? (info.sign < 0 ? Math.PI : 0) : info.sign > 0 ? Math.PI / 2 : -Math.PI / 2;
   scene.add(mesh);
   carMeshes.set(car.id, mesh);
+  carMeshKinds.set(car.id, mesh.userData.asset ? 'asset' : 'box');
 }
 
 function removeCar(id) {
   const mesh = carMeshes.get(id);
   if (mesh) {
     scene.remove(mesh);
-    mesh.geometry.dispose();
-    mesh.material.dispose();
+    if (carMeshKinds.get(id) === 'box') {
+      mesh.geometry.dispose();
+      mesh.material.dispose();
+    }
     carMeshes.delete(id);
+    carMeshKinds.delete(id);
   }
   const idx = cars.findIndex((c) => c.id === id);
   if (idx !== -1) cars.splice(idx, 1);

@@ -49,12 +49,12 @@ Porting/Android packaging is intentionally excluded — see the bottom section.
 
 ## Kenney asset integration
 - [x] Car Kit and City Kit (Roads) already downloaded and in place — do not re-download or fetch from a CDN, use the local files at `public/assets/models/cars/` and `public/assets/models/roads/`
-- [ ] Swap the box-geometry cars for GLB models from `public/assets/models/cars/`, one variant per direction for visual distinction
+- [x] Swap the box-geometry cars for GLB models from `public/assets/models/cars/`, one variant per direction for visual distinction
 - [ ] Use `public/assets/models/cars/ambulance.glb` for the priority-vehicle mechanic (see Addictive mechanics section)
-- [ ] Check each model's scale and forward-axis against our unit system before wiring it in — our cars are currently width 1.6 / length 3, and forward direction needs to line up with the sign/axis convention in `simulation.js`'s `DIRECTION_INFO`, or cars will drive sideways
-- [ ] Load models with `GLTFLoader` from root-relative paths, e.g. `loader.load('/assets/models/cars/sedan.glb', ...)` — the `Textures/` folder next to each pack's GLBs must stay exactly where it is, the models reference it by relative path
+- [x] Check each model's scale and forward-axis against our unit system before wiring it in — our cars are currently width 1.6 / length 3, and forward direction needs to line up with the sign/axis convention in `simulation.js`'s `DIRECTION_INFO`, or cars will drive sideways
+- [x] Load models with `GLTFLoader` from root-relative paths, e.g. `loader.load('/assets/models/cars/sedan.glb', ...)` — the `Textures/` folder next to each pack's GLBs must stay exactly where it is, the models reference it by relative path
 - [ ] Defer the `public/assets/models/roads/` swap until gameplay is locked — our road geometry is tied directly to `LANE_OFFSET`/`INTERSECTION_HALF` in `simulation.js`, so swapping it means re-aligning tile sizes to match, more work than the payoff right now
-- [ ] Add a credits line somewhere (README or in-game) — CC0 means attribution isn't required, but Kenney explicitly appreciates it
+- [x] Add a credits line somewhere (README or in-game) — CC0 means attribution isn't required, but Kenney explicitly appreciates it
 
 ---
 

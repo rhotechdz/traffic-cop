@@ -23,7 +23,7 @@ export function resetIdCounter() {
 }
 
 export function createCar(direction) {
-  return { id: nextId++, direction, s: SPAWN_S };
+  return { id: nextId++, direction, s: SPAWN_S, v: 0 };
 }
 
 export function carWorldPosition(car) {
@@ -69,23 +69,53 @@ export function stepSimulation(cars, lightState, delta) {
     for (let i = 0; i < lane.length; i++) {
       const car = lane[i];
       const leader = lane[i - 1];
-      let desired = car.s + CAR_SPEED * delta;
+      let targetSpeed = CAR_SPEED;
 
       if (!isGreen && car.s <= STOP_S) {
-        desired = Math.min(desired, STOP_S);
+        const distanceToStop = STOP_S - car.s;
+        targetSpeed = distanceToStop > 0 ? Math.min(targetSpeed, Math.max(0, distanceToStop * 1.8)) : 0;
       }
+
       if (leader) {
-        desired = Math.min(desired, leader.s - (CAR_LENGTH + CAR_GAP));
+        const gap = leader.s - car.s - (CAR_LENGTH + CAR_GAP);
+        targetSpeed = Math.min(targetSpeed, Math.max(0, gap * 2.4));
       }
-      car.s = Math.max(car.s, desired);
+
+      const acceleration = targetSpeed > car.v ? 10 : 18;
+      const deceleration = targetSpeed < car.v ? 16 : 10;
+
+      if (targetSpeed > car.v) {
+        car.v = Math.min(targetSpeed, car.v + acceleration * delta);
+      } else {
+        car.v = Math.max(targetSpeed, car.v - deceleration * delta);
+      }
+
+      car.s += car.v * delta;
     }
   }
 
   let collided = false;
+  let nearMiss = false;
   const active = cars.filter((c) => c.s > SPAWN_S && c.s < DESPAWN_S);
   for (let i = 0; i < active.length && !collided; i++) {
     for (let j = i + 1; j < active.length; j++) {
       if (active[i].direction === active[j].direction) continue;
+
+      const pa = carWorldPosition(active[i]);
+      const pb = carWorldPosition(active[j]);
+      const ha = halfExtents(active[i].direction);
+      const hb = halfExtents(active[j].direction);
+      const nearThreshold = {
+        x: ha.x + hb.x + 0.7,
+        z: ha.z + hb.z + 0.7,
+      };
+
+      const isNearMiss =
+        Math.abs(pa.x - pb.x) < nearThreshold.x && Math.abs(pa.z - pb.z) < nearThreshold.z;
+      if (isNearMiss && !boxesOverlap(active[i], active[j])) {
+        nearMiss = true;
+      }
+
       if (boxesOverlap(active[i], active[j])) {
         collided = true;
         break;
@@ -94,5 +124,5 @@ export function stepSimulation(cars, lightState, delta) {
   }
 
   const removedIds = cars.filter((c) => c.s >= DESPAWN_S).map((c) => c.id);
-  return { removedIds, collided };
+  return { removedIds, collided, nearMiss };
 }

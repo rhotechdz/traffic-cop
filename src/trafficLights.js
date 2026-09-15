@@ -6,19 +6,26 @@ const RED = 0xe74c3c;
 export function createTrafficLights() {
   const group = new THREE.Group();
 
+  const makeLightMaterial = (color) =>
+    new THREE.MeshStandardMaterial({
+      color,
+      emissive: color,
+      emissiveIntensity: 0.7,
+    });
+
   const nsLight = new THREE.Mesh(
     new THREE.SphereGeometry(0.6, 16, 16),
-    new THREE.MeshStandardMaterial({ color: GREEN })
+    makeLightMaterial(GREEN)
   );
   nsLight.position.set(-5, 2.5, -5);
-  nsLight.userData.pair = 'NS';
+  nsLight.userData = { pair: 'NS', flash: 0 };
 
   const ewLight = new THREE.Mesh(
     new THREE.SphereGeometry(0.6, 16, 16),
-    new THREE.MeshStandardMaterial({ color: RED })
+    makeLightMaterial(RED)
   );
   ewLight.position.set(5, 2.5, -5);
-  ewLight.userData.pair = 'EW';
+  ewLight.userData = { pair: 'EW', flash: 0 };
 
   const poleMat = new THREE.MeshStandardMaterial({ color: 0x555555 });
   for (const light of [nsLight, ewLight]) {
@@ -34,6 +41,10 @@ export function createTrafficLights() {
 export function updateTrafficLightColors(meshes, activePair) {
   for (const mesh of meshes) {
     const isGreen = mesh.userData.pair === activePair;
-    mesh.material.color.set(isGreen ? GREEN : RED);
+    const baseColor = isGreen ? GREEN : RED;
+    mesh.material.color.set(baseColor);
+    mesh.material.emissive.set(baseColor);
+    mesh.material.emissiveIntensity = isGreen ? 0.9 : 0.15;
+    mesh.userData.flash = isGreen ? 1 : 0;
   }
 }
